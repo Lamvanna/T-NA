@@ -577,7 +577,7 @@
         <div class="header">
             <h1>
                 <img src="./image/Photography studio.png" alt="T-NA Logo" class="logo">
-                <span style="font-family: 'Lobster', cursive;">T-NA Scanner</span>
+                <span style="font-family: 'Lobster', cursive; color: #ffffff;">T-NA Scanner</span>
             </h1>
             <p>Chuyển đổi ảnh thành file PDF chuyên nghiệp</p>
         </div>
@@ -587,9 +587,12 @@
                 <button class="btn btn-primary" onclick="triggerFileInput()">
                     📷 Chọn ảnh
                 </button>
-                <input type="file" id="fileInput" accept="image/*" multiple capture="environment">
+                <input type="file" id="fileInput" accept="image/*" multiple>
                 <button class="btn btn-success" onclick="generatePDF()">
                     💾 Xuất PDF
+                </button>
+                <button class="btn btn-secondary" onclick="sharePDF()" id="shareBtn" style="display:none;">
+                    📤 Chia sẻ
                 </button>
                 <button class="btn btn-danger" onclick="clearAll()">
                     🗑️ Xóa tất cả
@@ -648,6 +651,7 @@
     <script>
         let pages = [];
         let currentFilter = 'none';
+        let pdfBlob = null; // Lưu file PDF để chia sẻ
 
         // Prevent zoom on double tap
         let lastTouchEnd = 0;
@@ -877,13 +881,61 @@
                     pdf.addImage(page.filtered, 'JPEG', x, y, w, h);
                 }
 
+                // Lưu file PDF
+                pdfBlob = pdf.output('blob');
+                
+                // Tải file xuống
                 pdf.save(`${fileName}.pdf`);
+                
+                // Hiện nút chia sẻ trên mobile
+                if (navigator.share) {
+                    document.getElementById('shareBtn').style.display = 'flex';
+                }
+                
                 alert(`✅ Đã xuất file ${fileName}.pdf thành công!`);
                 document.getElementById('loading').classList.remove('active');
             } catch (error) {
                 console.error('Lỗi xuất PDF:', error);
                 alert('❌ Có lỗi khi xuất PDF: ' + error.message);
                 document.getElementById('loading').classList.remove('active');
+            }
+        }
+
+        async function sharePDF() {
+            if (!pdfBlob) {
+                alert('Vui lòng xuất PDF trước!');
+                return;
+            }
+
+            const fileName = document.getElementById('fileName').value || 'Scan_Document';
+
+            try {
+                if (navigator.share && navigator.canShare) {
+                    const file = new File([pdfBlob], `${fileName}.pdf`, { type: 'application/pdf' });
+                    
+                    if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            title: fileName,
+                            text: 'Chia sẻ file PDF từ T-NA Scanner'
+                        });
+                    } else {
+                        // Fallback: Tạo link download
+                        const url = URL.createObjectURL(pdfBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${fileName}.pdf`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                } else {
+                    alert('Trình duyệt không hỗ trợ chia sẻ. File đã được tải xuống.');
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Lỗi chia sẻ:', error);
+                    alert('Không thể chia sẻ: ' + error.message);
+                }
             }
         }
     </script>
