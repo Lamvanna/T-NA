@@ -283,6 +283,23 @@
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
         }
 
+        .drag-hint {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 15px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 8px;
+            margin: 15px 15px 0 15px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            animation: slideDown 0.6s ease-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
         .pages-container {
             padding: 15px;
             display: grid;
@@ -293,23 +310,35 @@
 
         .page-item {
             position: relative;
-            border: 2px solid #e9ecef;
+            border: 3px solid #e9ecef;
             border-radius: 12px;
             overflow: hidden;
             background: white;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            touch-action: manipulation;
+            cursor: pointer;
+            user-select: none;
         }
-
+        
         .page-item:active {
-            transform: scale(0.98);
+            cursor: grabbing;
         }
 
         .page-item:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
             border-color: #667eea;
+        }
+
+        .page-item.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+            cursor: grabbing;
+        }
+
+        .page-item.drag-over {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
         }
 
         .page-item img {
@@ -317,6 +346,12 @@
             height: 250px;
             object-fit: cover;
             display: block;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        
+        .page-item img:active {
+            opacity: 0.8;
         }
 
         .page-controls {
@@ -325,6 +360,7 @@
             right: 10px;
             display: flex;
             gap: 5px;
+            z-index: 10;
         }
 
         .page-btn {
@@ -363,6 +399,39 @@
             padding: 5px 10px;
             border-radius: 5px;
             font-weight: bold;
+            z-index: 5;
+        }
+
+        .drag-handle {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(102, 126, 234, 0.95);
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            cursor: grab;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10;
+            user-select: none;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .drag-handle:active {
+            cursor: grabbing;
+            background: rgba(118, 75, 162, 0.95);
+            transform: scale(1.1);
+        }
+        
+        .drag-handle:hover {
+            background: rgba(118, 75, 162, 0.95);
+            transform: scale(1.05);
         }
 
         .empty-state {
@@ -464,7 +533,111 @@
             transform: translateY(-2px);
         }
 
-                    @media (max-width: 768px) {
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: slideDown 0.4s ease-out;
+        }
+
+        .modal-content img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .modal-close:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+
+        .modal-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .modal-nav:hover {
+            background: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .modal-nav.prev {
+            left: 15px;
+        }
+
+        .modal-nav.next {
+            right: 15px;
+        }
+
+        .modal-info {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        @media (max-width: 768px) {
             body {
                 padding: 0;
             }
@@ -526,6 +699,18 @@
             .empty-state h3 {
                 font-size: 1.2em;
             }
+
+            .modal-nav {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
+
+            .modal-close {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -559,14 +744,14 @@
             color: #667eea;
             font-weight: bold;
             font-size: 18px;
-            animation: pulse 1.5s ease-in-out infinite;
+            animation: loadingPulse 1.5s ease-in-out infinite;
         }
 
         .loading.active {
             display: block;
         }
 
-        @keyframes pulse {
+        @keyframes loadingPulse {
             0%, 100% { opacity: 0.6; transform: scale(1); }
             50% { opacity: 1; transform: scale(1.05); }
         }
@@ -591,6 +776,9 @@
                 <button class="btn btn-success" onclick="generatePDF()">
                     💾 Xuất PDF
                 </button>
+                <button class="btn btn-secondary" onclick="previewPDF()" id="previewBtn" style="display:none;">
+                    👁️ Xem PDF
+                </button>
                 <button class="btn btn-secondary" onclick="sharePDF()" id="shareBtn" style="display:none;">
                     📤 Chia sẻ
                 </button>
@@ -609,6 +797,10 @@
                     <button class="filter-btn" data-filter="contrast" onclick="setFilter('contrast', this)">Tương phản</button>
                 </div>
             </div>
+        </div>
+
+        <div class="drag-hint" id="dragHint" style="display:none;">
+            🖐️ <strong>Giữ nút ☰</strong> và kéo để sắp xếp | <strong>Nhấn ảnh</strong> để xem phóng to
         </div>
 
         <div class="loading" id="loading">⏳ Đang xử lý...</div>
@@ -648,12 +840,24 @@
         </div>
     </div>
 
+    <div class="modal" id="imageModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <button class="modal-nav prev" onclick="navigateModal(-1)">‹</button>
+            <button class="modal-nav next" onclick="navigateModal(1)">›</button>
+            <img id="modalImage" src="" alt="Preview">
+            <div class="modal-info" id="modalInfo">Trang 1</div>
+        </div>
+    </div>
+
     <script>
         let pages = [];
         let currentFilter = 'none';
-        let pdfBlob = null; // Lưu file PDF để chia sẻ
+        let pdfBlob = null;
+        let currentModalIndex = 0;
+        let draggedElement = null;
+        let draggedIndex = -1;
 
-        // Prevent zoom on double tap
         let lastTouchEnd = 0;
         document.addEventListener('touchend', function(e) {
             const now = Date.now();
@@ -702,9 +906,11 @@
 
         function renderPages() {
             const container = document.getElementById('pagesContainer');
+            const dragHint = document.getElementById('dragHint');
             container.innerHTML = '';
 
             if (pages.length === 0) {
+                dragHint.style.display = 'none';
                 container.innerHTML = `
                     <div class="empty-state">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -717,20 +923,151 @@
                 return;
             }
 
+            dragHint.style.display = 'flex';
+
             pages.forEach((page, index) => {
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'page-item';
-                pageDiv.innerHTML = `
-                    <img src="${page.filtered}" alt="Page ${index + 1}">
-                    <div class="page-controls">
-                        <button class="page-btn" onclick="rotatePage(${index})" title="Xoay">🔄</button>
-                        <button class="page-btn" onclick="deletePage(${index})" title="Xóa">❌</button>
-                    </div>
-                    <div class="page-number">Trang ${index + 1}</div>
+                pageDiv.setAttribute('data-index', index);
+                pageDiv.draggable = true;
+                
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+                dragHandle.innerHTML = '☰';
+                dragHandle.title = 'Kéo để sắp xếp';
+                pageDiv.appendChild(dragHandle);
+                
+                const img = document.createElement('img');
+                img.src = page.filtered;
+                img.alt = `Page ${index + 1}`;
+                img.draggable = false;
+                img.onclick = function(e) {
+                    e.stopPropagation();
+                    openModal(index);
+                };
+                pageDiv.appendChild(img);
+                
+                const controls = document.createElement('div');
+                controls.className = 'page-controls';
+                controls.innerHTML = `
+                    <button class="page-btn" onclick="event.stopPropagation(); rotatePage(${index})" title="Xoay">🔄</button>
+                    <button class="page-btn" onclick="event.stopPropagation(); deletePage(${index})" title="Xóa">❌</button>
                 `;
+                pageDiv.appendChild(controls);
+                
+                const pageNum = document.createElement('div');
+                pageNum.className = 'page-number';
+                pageNum.textContent = `Trang ${index + 1}`;
+                pageDiv.appendChild(pageNum);
+                
+                pageDiv.addEventListener('dragstart', handleDragStart);
+                pageDiv.addEventListener('dragover', handleDragOver);
+                pageDiv.addEventListener('drop', handleDrop);
+                pageDiv.addEventListener('dragend', handleDragEnd);
+                pageDiv.addEventListener('dragenter', handleDragEnter);
+                pageDiv.addEventListener('dragleave', handleDragLeave);
+                
                 container.appendChild(pageDiv);
             });
         }
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            draggedIndex = parseInt(this.getAttribute('data-index'));
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDragEnter(e) {
+            if (this !== draggedElement) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            if (draggedElement !== this) {
+                const dropIndex = parseInt(this.getAttribute('data-index'));
+                
+                const movedItem = pages.splice(draggedIndex, 1)[0];
+                pages.splice(dropIndex, 0, movedItem);
+                
+                renderPages();
+            }
+
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.page-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+
+        function openModal(index) {
+            currentModalIndex = index;
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalInfo = document.getElementById('modalInfo');
+            
+            modalImage.src = pages[index].filtered;
+            modalInfo.textContent = `Trang ${index + 1} / ${pages.length}`;
+            modal.classList.add('active');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('active');
+        }
+
+        function navigateModal(direction) {
+            currentModalIndex += direction;
+            
+            if (currentModalIndex < 0) {
+                currentModalIndex = pages.length - 1;
+            } else if (currentModalIndex >= pages.length) {
+                currentModalIndex = 0;
+            }
+            
+            const modalImage = document.getElementById('modalImage');
+            const modalInfo = document.getElementById('modalInfo');
+            
+            modalImage.src = pages[currentModalIndex].filtered;
+            modalInfo.textContent = `Trang ${currentModalIndex + 1} / ${pages.length}`;
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            } else if (e.key === 'ArrowLeft') {
+                navigateModal(-1);
+            } else if (e.key === 'ArrowRight') {
+                navigateModal(1);
+            }
+        });
+
+        document.getElementById('imageModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
 
         function setFilter(filter, btn) {
             currentFilter = filter;
@@ -828,6 +1165,9 @@
         function clearAll() {
             if (pages.length > 0 && confirm('Bạn có chắc muốn xóa tất cả các trang?')) {
                 pages = [];
+                pdfBlob = null;
+                document.getElementById('shareBtn').style.display = 'none';
+                document.getElementById('previewBtn').style.display = 'none';
                 renderPages();
             }
         }
@@ -841,7 +1181,6 @@
             try {
                 document.getElementById('loading').classList.add('active');
 
-                // Kiểm tra thư viện jsPDF đã load chưa
                 if (typeof window.jspdf === 'undefined') {
                     alert('Đang tải thư viện... Vui lòng thử lại sau 2 giây!');
                     document.getElementById('loading').classList.remove('active');
@@ -881,18 +1220,34 @@
                     pdf.addImage(page.filtered, 'JPEG', x, y, w, h);
                 }
 
-                // Lưu file PDF
                 pdfBlob = pdf.output('blob');
                 
-                // Tải file xuống
-                pdf.save(`${fileName}.pdf`);
+                const isZalo = /Zalo/i.test(navigator.userAgent);
+                const isWebView = /wv|WebView/i.test(navigator.userAgent);
                 
-                // Hiện nút chia sẻ trên mobile
-                if (navigator.share) {
-                    document.getElementById('shareBtn').style.display = 'flex';
+                if (isZalo || isWebView) {
+                    const blobUrl = URL.createObjectURL(pdfBlob);
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = `${fileName}.pdf`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+                    
+                    alert(`✅ File PDF đã sẵn sàng!\n\n📱 Nếu không tự động tải:\n1. Nhấn nút "👁️ Xem PDF" để xem trước\n2. Nhấn nút "📤 Chia sẻ" để lưu file\n3. Hoặc mở link bằng trình duyệt Chrome/Safari`);
+                } else {
+                    pdf.save(`${fileName}.pdf`);
+                    alert(`✅ Đã xuất file ${fileName}.pdf thành công!`);
                 }
                 
-                alert(`✅ Đã xuất file ${fileName}.pdf thành công!`);
+                document.getElementById('shareBtn').style.display = 'flex';
+                document.getElementById('previewBtn').style.display = 'flex';
+                
                 document.getElementById('loading').classList.remove('active');
             } catch (error) {
                 console.error('Lỗi xuất PDF:', error);
@@ -919,23 +1274,53 @@
                             title: fileName,
                             text: 'Chia sẻ file PDF từ T-NA Scanner'
                         });
-                    } else {
-                        // Fallback: Tạo link download
-                        const url = URL.createObjectURL(pdfBlob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${fileName}.pdf`;
-                        a.click();
-                        URL.revokeObjectURL(url);
+                        return;
                     }
-                } else {
-                    alert('Trình duyệt không hỗ trợ chia sẻ. File đã được tải xuống.');
                 }
+                
+                const url = URL.createObjectURL(pdfBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${fileName}.pdf`;
+                a.style.display = 'none';
+                
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    if (confirm('Không thể tải tự động.\nBạn có muốn mở file PDF trong tab mới không?')) {
+                        window.open(url, '_blank');
+                    }
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                }, 500);
+                
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.error('Lỗi chia sẻ:', error);
-                    alert('Không thể chia sẻ: ' + error.message);
+                    
+                    const url = URL.createObjectURL(pdfBlob);
+                    window.open(url, '_blank');
+                    
+                    alert('⚠️ Đã mở file PDF trong tab mới.\nVui lòng tải xuống từ đó.');
+                    setTimeout(() => URL.revokeObjectURL(url), 5000);
                 }
+            }
+        }
+
+        function previewPDF() {
+            if (!pdfBlob) {
+                alert('Vui lòng xuất PDF trước!');
+                return;
+            }
+
+            const url = URL.createObjectURL(pdfBlob);
+            const newWindow = window.open(url, '_blank');
+            
+            if (!newWindow) {
+                alert('⚠️ Trình duyệt đã chặn cửa sổ mới.\nVui lòng cho phép popup để xem PDF.');
+            } else {
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
             }
         }
     </script>
