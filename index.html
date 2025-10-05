@@ -6,6 +6,8 @@
     <title>T-NA Scanner</title>
     <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Thêm OpenCV.js để xử lý ảnh nâng cao -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="window.cvReady=true;"></script>
     <style>
         * {
             margin: 0;
@@ -889,29 +891,144 @@
         // Hàm tự động xử lý ảnh: phát hiện góc, cắt và căn chỉnh
         async function autoProcessImage(img, originalData) {
             return new Promise((resolve) => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                
-                // Lấy dữ liệu ảnh để phát hiện cạnh
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Thử phát hiện góc trang giấy
-                const corners = detectPageCorners(imageData);
-                
-                if (corners) {
-                    // Nếu phát hiện được góc, cắt và căn chỉnh
-                    const processed = perspectiveTransform(img, corners);
-                    resolve(processed);
-                } else {
-                    // Nếu không phát hiện được, trả về ảnh gốc
+                // Đợi OpenCV sẵn sàng
+                if (!window.cvReady || typeof cv === 'undefined') {
+                    // Nếu OpenCV chưa sẵn sàng, trả về ảnh gốc
                     resolve({
                         imageData: originalData,
                         width: img.width,
-                        height: img.height
+                        height: img.height,
+                        corners: null
+                    });
+                    return;
+                }
+                // Tạo canvas để lấy dữ liệu ảnh
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                // Chuyển sang OpenCV Mat
+                let src = cv.imread(canvas);
+                let dst = new cv.Mat();
+                let gray = new cv.Mat();
+                let blurred = new cv.Mat();
+                let edged = new cv.Mat();
+                // 1. Chuyển sang grayscale
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+                // 2. Làm mờ để giảm nhiễu
+                cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+                // 3. Phát hiện cạnh Canny
+                cv.Canny(blurred, edged, 75, 200);
+                // 4. Tìm contour lớn nhất (giả định là trang giấy)
+                let contours = new cv.MatVector();
+                let hierarchy = new cv.Mat();
+                cv.findContours(edged, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+                let maxArea = 0;
+                let pageContour = null;
+                let pageContourPoints = null;
+                for (let i = 0; i < contours.size(); i++) {
+                    let cnt = contours.get(i);
+                    let peri = cv.arcLength(cnt, true);
+                    let approx = new cv.Mat();
+                    cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+                    if (approx.rows === 4) {
+                        let area = cv.contourArea(approx);
+                        if (area > maxArea) {
+                            maxArea = area;
+                            if (pageContour) pageContour.delete();
+                            pageContour = approx;
+                            // Lưu lại điểm để vẽ preview
+                            pageContourPoints = [];
+                            for (let j = 0; j < 4; j++) {
+                                pageContourPoints.push({ x: approx.intPtr(j, 0)[0], y: approx.intPtr(j, 0)[1] });
+                            }
+                        } else {
+                            approx.delete();
+                        }
+                    } else {
+                        approx.delete();
+                    }
+                }
+                if (pageContour && maxArea > 10000) {
+                    // Sắp xếp lại 4 điểm theo thứ tự: TL, TR, BR, BL
+                    let pts = [];
+                    for (let i = 0; i < 4; i++) {
+                        pts.push({ x: pageContour.intPtr(i, 0)[0], y: pageContour.intPtr(i, 0)[1] });
+                    }
+                    // Sắp xếp các điểm
+                    pts.sort((a, b) => a.x + a.y - (b.x + b.y));
+                    let topLeft = pts[0];
+                    let bottomRight = pts[3];
+                    pts.sort((a, b) => a.x - b.x);
+                    let topRight = pts[3].y < pts[2].y ? pts[3] : pts[2];
+                    let bottomLeft = pts[2].y > pts[3].y ? pts[2] : pts[3];
+                    // Lấy tỉ lệ khổ giấy từ lựa chọn người dùng
+                    let pageSize = (document.getElementById('pageSize')?.value || 'a4').toLowerCase();
+                    let ratio = 210/297; // A4 mặc định
+                    if (pageSize === 'a4') ratio = 210/297;
+                    else if (pageSize === 'a5') ratio = 148/210;
+                    else if (pageSize === 'b4') ratio = 250/353;
+                    else if (pageSize === 'letter') ratio = 216/279;
+                    else if (pageSize === 'legal') ratio = 216/356;
+                    // Tính kích thước mới theo tỉ lệ khổ giấy
+                    let widthA = Math.hypot(bottomRight.x - bottomLeft.x, bottomRight.y - bottomLeft.y);
+                    let widthB = Math.hypot(topRight.x - topLeft.x, topRight.y - topLeft.y);
+                    let maxWidth = Math.max(widthA, widthB);
+                    let heightA = Math.hypot(topRight.x - bottomRight.x, topRight.y - bottomRight.y);
+                    let heightB = Math.hypot(topLeft.x - bottomLeft.x, topLeft.y - bottomLeft.y);
+                    let maxHeight = Math.max(heightA, heightB);
+                    // Điều chỉnh lại kích thước để đúng tỉ lệ khổ giấy
+                    if (maxWidth / maxHeight > ratio) {
+                        maxWidth = maxHeight * ratio;
+                    } else {
+                        maxHeight = maxWidth / ratio;
+                    }
+                    // Perspective transform
+                    let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                        topLeft.x, topLeft.y,
+                        topRight.x, topRight.y,
+                        bottomRight.x, bottomRight.y,
+                        bottomLeft.x, bottomLeft.y
+                    ]);
+                    let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                        0, 0,
+                        maxWidth - 1, 0,
+                        maxWidth - 1, maxHeight - 1,
+                        0, maxHeight - 1
+                    ]);
+                    let M = cv.getPerspectiveTransform(srcTri, dstTri);
+                    cv.warpPerspective(src, dst, M, new cv.Size(maxWidth, maxHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+                    // Tăng tương phản
+                    cv.cvtColor(dst, dst, cv.COLOR_RGBA2RGB, 0);
+                    let alpha = 1.3, beta = 30; // contrast, brightness
+                    dst.convertTo(dst, -1, alpha, beta);
+                    // Xuất ra base64
+                    let outCanvas = document.createElement('canvas');
+                    outCanvas.width = Math.round(maxWidth);
+                    outCanvas.height = Math.round(maxHeight);
+                    cv.imshow(outCanvas, dst);
+                    const quality = parseFloat(document.getElementById('quality').value);
+                    let imageData = outCanvas.toDataURL('image/jpeg', quality);
+                    // Giải phóng bộ nhớ
+                    src.delete(); dst.delete(); gray.delete(); blurred.delete(); edged.delete(); contours.delete(); hierarchy.delete();
+                    if (pageContour) pageContour.delete();
+                    srcTri.delete(); dstTri.delete(); M.delete();
+                    resolve({
+                        imageData,
+                        width: outCanvas.width,
+                        height: outCanvas.height,
+                        corners: pageContourPoints
+                    });
+                } else {
+                    // Không phát hiện được trang giấy, trả về ảnh gốc
+                    src.delete(); dst.delete(); gray.delete(); blurred.delete(); edged.delete(); contours.delete(); hierarchy.delete();
+                    if (pageContour) pageContour.delete();
+                    resolve({
+                        imageData: originalData,
+                        width: img.width,
+                        height: img.height,
+                        corners: null
                     });
                 }
             });
@@ -1041,7 +1158,7 @@
             
             ctx.putImageData(imageData, 0, 0);
         }
-        let pages = [];
+        let pages = [];20 
         let currentFilter = 'none';
         let pdfBlob = null;
         let currentModalIndex = 0;
@@ -1066,7 +1183,6 @@
         function handleFiles(e) {
             const files = Array.from(e.target.files);
             document.getElementById('loading').classList.add('active');
-            
             let processed = 0;
             files.forEach(file => {
                 if (file.type.startsWith('image/')) {
@@ -1074,17 +1190,21 @@
                     reader.onload = function(event) {
                         const img = new Image();
                         img.onload = function() {
-                            pages.push({
-                                original: event.target.result,
-                                filtered: event.target.result,
-                                width: img.width,
-                                height: img.height
+                            // Tự động xử lý ảnh trước khi thêm vào
+                            autoProcessImage(img, event.target.result).then(processedData => {
+                                pages.push({
+                                    original: processedData.imageData,
+                                    filtered: processedData.imageData,
+                                    width: processedData.width,
+                                    height: processedData.height,
+                                    corners: processedData.corners
+                                });
+                                processed++;
+                                if (processed === files.length) {
+                                    document.getElementById('loading').classList.remove('active');
+                                    renderPages();
+                                }
                             });
-                            processed++;
-                            if (processed === files.length) {
-                                document.getElementById('loading').classList.remove('active');
-                                renderPages();
-                            }
                         };
                         img.src = event.target.result;
                     };
@@ -1127,21 +1247,46 @@
                 dragHandle.title = 'Kéo để sắp xếp';
                 pageDiv.appendChild(dragHandle);
                 
-                const img = document.createElement('img');
-                img.src = page.filtered;
-                img.alt = `Page ${index + 1}`;
-                img.draggable = false;
-                img.onclick = function(e) {
+                // Tạo canvas preview để vẽ khung góc nếu có
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = 200;
+                previewCanvas.height = 250;
+                const ctx = previewCanvas.getContext('2d');
+                const imgEl = new window.Image();
+                imgEl.onload = function() {
+                    ctx.drawImage(imgEl, 0, 0, previewCanvas.width, previewCanvas.height);
+                    if (page.corners && page.corners.length === 4) {
+                        ctx.save();
+                        ctx.strokeStyle = '#ff0000';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        let scaleX = previewCanvas.width / page.width;
+                        let scaleY = previewCanvas.height / page.height;
+                        ctx.moveTo(page.corners[0].x * scaleX, page.corners[0].y * scaleY);
+                        for (let i = 1; i < 4; i++) {
+                            ctx.lineTo(page.corners[i].x * scaleX, page.corners[i].y * scaleY);
+                        }
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                };
+                imgEl.src = page.filtered;
+                previewCanvas.style.display = 'block';
+                previewCanvas.style.width = '100%';
+                previewCanvas.style.height = '250px';
+                previewCanvas.onclick = function(e) {
                     e.stopPropagation();
                     openModal(index);
                 };
-                pageDiv.appendChild(img);
+                pageDiv.appendChild(previewCanvas);
                 
                 const controls = document.createElement('div');
                 controls.className = 'page-controls';
                 controls.innerHTML = `
                     <button class="page-btn" onclick="event.stopPropagation(); rotatePage(${index})" title="Xoay">🔄</button>
                     <button class="page-btn" onclick="event.stopPropagation(); deletePage(${index})" title="Xóa">❌</button>
+                    <button class="page-btn" onclick="event.stopPropagation(); editCorners(${index})" title="Chỉnh góc">✏️</button>
                 `;
                 pageDiv.appendChild(controls);
                 
@@ -1159,6 +1304,194 @@
                 
                 container.appendChild(pageDiv);
             });
+// Modal chỉnh góc thủ công
+let editCornersIndex = null;
+let editCornersPoints = null;
+// Đảm bảo chỉ tạo modal một lần, không tạo lại nếu đã có
+function ensureEditCornersModal() {
+    let modal = document.getElementById('editCornersModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'editCornersModal';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
+        modal.style.background = 'rgba(0,0,0,0.8)';
+        modal.style.zIndex = '2000';
+        modal.style.display = 'none';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.innerHTML = `
+            <div style="background:#fff;padding:20px;border-radius:12px;position:relative;max-width:95vw;max-height:95vh;">
+                <canvas id="editCornersCanvas" style="display:block;max-width:80vw;max-height:80vh;cursor:crosshair;"></canvas>
+                <div style="margin-top:10px;text-align:center;">
+                    <button id="applyCornersBtn" style="padding:10px 20px;font-weight:bold;">Cắt lại</button>
+                    <button id="closeCornersBtn" style="padding:10px 20px;">Đóng</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    return modal;
+}
+function editCorners(index) {
+    editCornersIndex = index;
+    const page = pages[index];
+    let modal = ensureEditCornersModal();
+    modal.style.display = 'flex';
+    // Vẽ ảnh gốc và các điểm góc
+    const img = new window.Image();
+    img.onload = function() {
+        const canvas = document.getElementById('editCornersCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        // Lấy điểm góc hiện tại hoặc mặc định
+        if (page.corners && page.corners.length === 4) {
+            editCornersPoints = page.corners.map(pt => ({...pt}));
+        } else {
+            editCornersPoints = [
+                {x:0,y:0},
+                {x:img.width, y:0},
+                {x:img.width, y:img.height},
+                {x:0, y:img.height}
+            ];
+        }
+        drawEditCorners();
+    };
+    img.src = page.original;
+    // Sự kiện kéo điểm góc
+    let draggingIdx = null;
+    const canvas = document.getElementById('editCornersCanvas');
+    canvas.onmousedown = function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left);
+        const y = (e.clientY - rect.top);
+        for (let i = 0; i < 4; i++) {
+            const pt = editCornersPoints[i];
+            if (Math.abs(x - pt.x) < 20 && Math.abs(y - pt.y) < 20) {
+                draggingIdx = i;
+                break;
+            }
+        }
+    };
+    canvas.onmousemove = function(e) {
+        if (draggingIdx !== null) {
+            const rect = canvas.getBoundingClientRect();
+            editCornersPoints[draggingIdx].x = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
+            editCornersPoints[draggingIdx].y = Math.max(0, Math.min(canvas.height, e.clientY - rect.top));
+            drawEditCorners();
+        }
+    };
+    canvas.onmouseup = function() { draggingIdx = null; };
+    canvas.onmouseleave = function() { draggingIdx = null; };
+    // Nút đóng
+    document.getElementById('closeCornersBtn').onclick = function() {
+        modal.style.display = 'none';
+    };
+    // Nút áp dụng
+    document.getElementById('applyCornersBtn').onclick = function() {
+        // Cắt lại ảnh theo góc mới
+        applyManualCorners();
+        modal.style.display = 'none';
+    };
+}
+function drawEditCorners() {
+    const canvas = document.getElementById('editCornersCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const img = new window.Image();
+    img.onload = function() {
+        ctx.drawImage(img, 0, 0);
+        // Vẽ khung
+        ctx.save();
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(editCornersPoints[0].x, editCornersPoints[0].y);
+        for (let i = 1; i < 4; i++) ctx.lineTo(editCornersPoints[i].x, editCornersPoints[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        // Vẽ điểm
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.arc(editCornersPoints[i].x, editCornersPoints[i].y, 10, 0, 2*Math.PI);
+            ctx.fillStyle = '#00f';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        ctx.restore();
+    };
+    img.src = pages[editCornersIndex].original;
+}
+async function applyManualCorners() {
+    // Cắt lại ảnh theo 4 điểm editCornersPoints
+    const page = pages[editCornersIndex];
+    if (!window.cvReady || typeof cv === 'undefined') return;
+    const img = new window.Image();
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        let src = cv.imread(canvas);
+        let dst = new cv.Mat();
+        // Lấy tỉ lệ khổ giấy
+        let pageSize = (document.getElementById('pageSize')?.value || 'a4').toLowerCase();
+        let ratio = 210/297;
+        if (pageSize === 'a4') ratio = 210/297;
+        else if (pageSize === 'a5') ratio = 148/210;
+        else if (pageSize === 'b4') ratio = 250/353;
+        else if (pageSize === 'letter') ratio = 216/279;
+        else if (pageSize === 'legal') ratio = 216/356;
+        // Tính kích thước mới
+        let maxWidth = img.width;
+        let maxHeight = img.height;
+        if (maxWidth / maxHeight > ratio) maxWidth = maxHeight * ratio;
+        else maxHeight = maxWidth / ratio;
+        // Perspective transform
+        let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            editCornersPoints[0].x, editCornersPoints[0].y,
+            editCornersPoints[1].x, editCornersPoints[1].y,
+            editCornersPoints[2].x, editCornersPoints[2].y,
+            editCornersPoints[3].x, editCornersPoints[3].y
+        ]);
+        let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            0, 0,
+            maxWidth - 1, 0,
+            maxWidth - 1, maxHeight - 1,
+            0, maxHeight - 1
+        ]);
+        let M = cv.getPerspectiveTransform(srcTri, dstTri);
+        cv.warpPerspective(src, dst, M, new cv.Size(maxWidth, maxHeight), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+        // Tăng tương phản
+        cv.cvtColor(dst, dst, cv.COLOR_RGBA2RGB, 0);
+        let alpha = 1.3, beta = 30;
+        dst.convertTo(dst, -1, alpha, beta);
+        let outCanvas = document.createElement('canvas');
+        outCanvas.width = Math.round(maxWidth);
+        outCanvas.height = Math.round(maxHeight);
+        cv.imshow(outCanvas, dst);
+        const quality = parseFloat(document.getElementById('quality').value);
+        let imageData = outCanvas.toDataURL('image/jpeg', quality);
+        // Cập nhật lại page
+        page.original = imageData;
+        page.filtered = imageData;
+        page.width = outCanvas.width;
+        page.height = outCanvas.height;
+        page.corners = editCornersPoints.map(pt => ({...pt}));
+        // Giải phóng bộ nhớ
+        src.delete(); dst.delete(); srcTri.delete(); dstTri.delete(); M.delete();
+        renderPages();
+    };
+    img.src = pages[editCornersIndex].original;
+}
         }
 
         function handleDragStart(e) {
