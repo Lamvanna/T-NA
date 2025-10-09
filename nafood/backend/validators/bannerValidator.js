@@ -1,0 +1,1 @@
+exports.create = (data) => { const errors = []; if (!data.image) errors.push('image required'); return errors; };

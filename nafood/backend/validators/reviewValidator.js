@@ -1,0 +1,1 @@
+exports.create = (data) => { const errors = []; if (!data.productId) errors.push('productId required'); return errors; };

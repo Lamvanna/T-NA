@@ -1,0 +1,1 @@
+console.log('admin reports loaded');
